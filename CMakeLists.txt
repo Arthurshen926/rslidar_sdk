@@ -139,6 +139,7 @@ if(rclcpp_FOUND)
   set(CMAKE_CXX_STANDARD 14)
 
   find_package(ament_cmake REQUIRED)
+  find_package(rclcpp_components REQUIRED)
   find_package(sensor_msgs REQUIRED)
   find_package(rslidar_msg REQUIRED)
   find_package(std_msgs REQUIRED)                      
@@ -168,9 +169,28 @@ add_executable(rslidar_sdk_node
                node/rslidar_sdk_node.cpp
                src/manager/node_manager.cpp)
 
+# Add component library for composition
+add_library(rslidar_component SHARED
+  src/rslidar_component.cpp
+  src/manager/node_manager.cpp)
+
+target_include_directories(rslidar_component PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${rs_driver_INCLUDE_DIRS}
+)
+
 target_link_libraries(rslidar_sdk_node                   
                       ${YAML_CPP_LIBRARIES}
                       ${rs_driver_LIBRARIES})
+
+target_link_libraries(rslidar_component                   
+                      ${YAML_CPP_LIBRARIES}
+                      ${rs_driver_LIBRARIES})
+
+# Register component with pluginlib
+rclcpp_components_register_nodes(rslidar_component "robosense::lidar::RSLidarComponent")
+set(node_plugins "${node_plugins}robosense::lidar::RSLidarComponent;$<TARGET_FILE:rslidar_component>\n")
 
 #Ros#
 if(roscpp_FOUND)
@@ -193,6 +213,13 @@ if(rclcpp_FOUND)
     std_msgs 
     sensor_msgs 
     rslidar_msg)
+    
+  ament_target_dependencies(rslidar_component
+    rclcpp
+    rclcpp_components
+    std_msgs
+    sensor_msgs
+    rslidar_msg)
 
   install(TARGETS
     rslidar_sdk_node
@@ -202,7 +229,14 @@ if(rclcpp_FOUND)
     launch
     rviz
     DESTINATION share/${PROJECT_NAME})
-
+    
+  # install(DIRECTORY include/
+  #   DESTINATION include)
+  install(TARGETS rslidar_component
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin
+  )
   ament_package()
 
 endif(rclcpp_FOUND)
